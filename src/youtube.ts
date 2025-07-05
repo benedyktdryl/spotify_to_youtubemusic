@@ -130,40 +130,49 @@ export const youtubeRoutes = new Elysia({ prefix: "/youtube" })
     .post("/auth/browser", async ({ body }) => {
         const { headers } = body as { headers: string };
         if (!headers) {
-            return new Response("Headers not provided", { status: 400 });
+            console.error("YouTube browser auth error: No headers provided.");
+            return new Response("Request body must be a JSON object with a 'headers' property.", { status: 400 });
         }
+
         try {
             const parsedHeaders = JSON.parse(headers);
             const cookie = parsedHeaders.cookie;
+
             if (!cookie) {
-                return new Response("Cookie not found in headers", { status: 400 });
+                console.error("YouTube browser auth error: No cookie found in headers.", { receivedKeys: Object.keys(parsedHeaders) });
+                return new Response("The 'cookie' property is missing from the provided headers.", { status: 400 });
             }
+
             // Spoof the rest of the headers
-            const spoofedHeaders = {
-                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-                "accept-language": "en-US,en;q=0.9",
-                "accept-encoding": "gzip, deflate, br",
-                "accept": "*/*",
-                "referer": "https://music.youtube.com/",
-                "origin": "https://music.youtube.com",
-                "dnt": "1",
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-origin",
-                "cookie": cookie,
-            };
+            // const spoofedHeaders = {
+            //     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+            //     "accept-language": "en-US,en;q=0.9",
+            //     "accept-encoding": "gzip, deflate, br",
+            //     "accept": "*/*",
+            //     "referer": "https://music.youtube.com/",
+            //     "origin": "https://music.youtube.com",
+            //     "dnt": "1",
+            //     "sec-fetch-dest": "empty",
+            //     "sec-fetch-mode": "cors",
+            //     "sec-fetch-site": "same-origin",
+            //     "cookie": cookie,
+            // };
+			const spoofedHeaders = parsedHeaders;
 
             db.run(
-                "INSERT OR REPLACE INTO tokens (service, access_token, auth_type) VALUES (?, ?, ?)",
+                "INSERT OR REPLACE INTO tokens (service, access_token, auth_type, value) VALUES (?, ?, ?, ?)",
                 "youtube",
                 JSON.stringify(spoofedHeaders),
-                "browser"
+                "browser",
+                headers // Store the original headers for debugging
             );
+
             return { message: "YouTube browser authentication successful." };
         } catch (error) {
-            return new Response("Invalid JSON in headers", { status: 400 });
+            console.error("YouTube browser auth error: Invalid JSON in headers.", { error: error, receivedHeaders: headers });
+            return new Response("The 'headers' property must be a valid JSON string.", { status: 400 });
         }
-    });
+    })
     .post("/set-cookie", async ({ body }) => {
         const { cookie } = body as { cookie: string };
         if (!cookie) {

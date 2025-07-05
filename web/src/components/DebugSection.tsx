@@ -19,7 +19,8 @@ interface DebugInfo {
     spotifyScopes: string[];
     youtubeScopes: string[];
   };
-  youtubeAuthType: 'oauth' | 'browser' | 'disconnected'; // Added youtubeAuthType
+  youtubeAuthType: 'oauth' | 'browser' | 'disconnected';
+  youtubeBrowserHeaders?: Record<string, any>;
 }
 
 interface DebugSectionProps {
@@ -98,7 +99,7 @@ export function DebugSection({ debugInfo, onRefreshDebugInfo }: DebugSectionProp
                 <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 col-span-2">
                   <span className="text-sm">YouTube Auth Type</span>
                   <Badge className="text-xs">
-                    {debugInfo.youtubeAuthType.toUpperCase()}
+                    {debugInfo.youtubeAuthType?.toUpperCase()}
                   </Badge>
                 </div>
               </div>
@@ -131,6 +132,26 @@ export function DebugSection({ debugInfo, onRefreshDebugInfo }: DebugSectionProp
                 </div>
               </div>
             </div>
+
+            {/* YouTube Browser Headers */}
+            {debugInfo.youtubeAuthType === 'browser' && debugInfo.youtubeBrowserHeaders && (
+              <div className="space-y-3">
+                <h4 className="flex items-center gap-2 font-medium text-sm">
+                  <Key className="h-4 w-4" />
+                  YouTube Browser Headers
+                </h4>
+                <div className="p-3 rounded-lg bg-white dark:bg-gray-800">
+                  <div className="text-sm font-medium mb-2">Header Keys</div>
+                  <div className="space-y-1">
+                    {Object.keys(debugInfo.youtubeBrowserHeaders).map((key, index) => (
+                      <Badge key={index} variant="outline" className="text-xs mr-1">
+                        {key}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Permissions */}
             <div className="space-y-3">

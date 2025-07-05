@@ -53,6 +53,7 @@ function App() {
     systemInfo: { userAgent: string; timestamp: string; sessionId: string };
     permissions: { spotifyScopes: string[]; youtubeScopes: string[] };
     youtubeAuthType: 'oauth' | 'browser' | 'disconnected';
+    youtubeBrowserHeaders?: Record<string, any>;
   }>({
     apiStatus: { spotify: 'disconnected', youtube: 'disconnected' },
     systemInfo: {
@@ -65,10 +66,11 @@ function App() {
       youtubeScopes: ['https://www.googleapis.com/auth/youtube'],
     },
     youtubeAuthType: 'disconnected',
+    youtubeBrowserHeaders: {},
   });
   const [youtubeAuthMethod, setYoutubeAuthMethod] = useState<'oauth' | 'browser' | null>(null);
   const [youtubeBrowserHeaders, setYoutubeBrowserHeaders] = useState('');
-  
+
 
   const addLog = useCallback((type: LogEntry['type'], message: string, details?: string) => {
     const newLog: LogEntry = {
@@ -85,6 +87,7 @@ function App() {
     try {
       const response = await fetch("http://localhost:3000/status");
       const data = await response.json();
+
       setIsSpotifyConnected(data.spotifyAuthenticated);
       setIsYouTubeConnected(data.youtubeAuthenticated);
       setDebugInfo(prev => ({
@@ -93,9 +96,7 @@ function App() {
           spotify: data.spotifyAuthenticated ? 'connected' : 'disconnected',
           youtube: data.youtubeAuthenticated ? 'connected' : 'disconnected',
         },
-        youtubeAuthType: data.youtubeAuthenticated
-          ? "oauth" // or "browser" if you know the method
-          : "disconnected",
+        youtubeAuthType: data.youtubeAuthType,
       }));
       addLog('info', 'Authentication status updated', `Spotify: ${data.spotifyAuthenticated ? 'Connected' : 'Disconnected'}, YouTube: ${data.youtubeAuthenticated ? 'Connected' : 'Disconnected'}`);
     } catch (error) {
@@ -185,6 +186,12 @@ function App() {
         addLog('success', 'YouTube browser authentication successful.', data.message);
         fetchAuthStatus();
         setYoutubeAuthMethod(null); // Hide input after successful connection
+        try {
+          const parsedHeaders = JSON.parse(youtubeBrowserHeaders);
+          setDebugInfo(prev => ({ ...prev, youtubeBrowserHeaders: parsedHeaders }));
+        } catch (e) {
+          // Ignore error if headers are not valid JSON
+        }
       } else {
         addLog('error', 'YouTube browser authentication failed.', data.message || JSON.stringify(data));
       }
@@ -193,7 +200,7 @@ function App() {
     }
   };
 
-  
+
 
   const handleYouTubeDisconnect = async () => {
     try {
@@ -282,6 +289,25 @@ function App() {
   useEffect(() => {
     fetchPlaylists();
   }, [fetchPlaylists]);
+
+  useEffect(() => {
+    if (isSpotifyConnected && isYouTubeConnected) {
+      const syncPlaylists = async () => {
+        try {
+          const response = await fetch("http://localhost:3000/sync-playlists", { method: "POST" });
+          if (response.ok) {
+            addLog('info', 'Playlist sync completed successfully.');
+            fetchPlaylists(); // Refresh playlists to show migrated status
+          } else {
+            addLog('error', 'Failed to sync playlists', await response.text());
+          }
+        } catch (error) {
+          addLog('error', 'Error syncing playlists', String(error));
+        }
+      };
+      syncPlaylists();
+    }
+  }, [isSpotifyConnected, isYouTubeConnected, addLog, fetchPlaylists]);
 
   const refreshDebugInfo = useCallback(async () => {
     try {

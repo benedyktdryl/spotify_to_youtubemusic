@@ -14,13 +14,18 @@ const app = new Elysia()
         const youtubeToken: any = db.query("SELECT access_token, auth_type FROM tokens WHERE service = 'youtube'").get();
 
         let youtubeAuthenticated = false;
+        let youtubeAuthType = 'disconnected';
         if (youtubeToken) {
             if (youtubeToken.auth_type === 'oauth') {
                 youtubeAuthenticated = !!youtubeToken.access_token; // Check if OAuth token exists
+                if (youtubeAuthenticated) {
+                    youtubeAuthType = 'oauth';
+                }
             } else if (youtubeToken.auth_type === 'browser') {
                 try {
                     JSON.parse(youtubeToken.access_token); // Check if browser headers are valid JSON
                     youtubeAuthenticated = true;
+                    youtubeAuthType = 'browser';
                 } catch (e) {
                     youtubeAuthenticated = false;
                 }
@@ -30,6 +35,7 @@ const app = new Elysia()
         return {
             spotifyAuthenticated: !!spotifyToken,
             youtubeAuthenticated: youtubeAuthenticated,
+            youtubeAuthType: youtubeAuthType,
         };
     })
     .get("/spotify/playlists", async () => {
@@ -64,6 +70,63 @@ const app = new Elysia()
             };
         });
         return playlistsWithStatus;
+    })
+    .get("/youtube/playlists", async () => {
+        const youtubeToken: any = db.query("SELECT access_token, auth_type FROM tokens WHERE service = 'youtube'").get();
+
+        if (!youtubeToken) {
+            return new Response("YouTube not authenticated", { status: 401 });
+        }
+
+        let headers = {};
+        if (youtubeToken.auth_type === 'oauth') {
+            headers = { "Authorization": `Bearer ${youtubeToken.access_token}` };
+        } else if (youtubeToken.auth_type === 'browser') {
+            headers = JSON.parse(youtubeToken.access_token);
+        }
+
+        const response = await fetch("https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true", {
+            headers: headers
+        });
+
+        if (!response.ok) {
+            return new Response(JSON.stringify(await response.json()), { status: response.status });
+        }
+
+        const data = await response.json();
+        return data.items.map((playlist: any) => ({
+            id: playlist.id,
+            name: playlist.snippet.title,
+        }));
+    })
+    .post("/sync-playlists", async () => {
+        const spotifyPlaylistsResponse = await app.handle(new Request("http://localhost:3000/spotify/playlists"));
+        const youtubePlaylistsResponse = await app.handle(new Request("http://localhost:3000/youtube/playlists"));
+
+        if (!spotifyPlaylistsResponse.ok || !youtubePlaylistsResponse.ok) {
+            return new Response("Failed to fetch playlists from one or both services.", { status: 500 });
+        }
+
+        const spotifyPlaylists = await spotifyPlaylistsResponse.json();
+        const youtubePlaylists = await youtubePlaylistsResponse.json();
+
+        const youtubePlaylistMap = new Map(youtubePlaylists.map((p: any) => [p.name, p.id]));
+
+        for (const spotifyPlaylist of spotifyPlaylists) {
+            if (youtubePlaylistMap.has(spotifyPlaylist.name)) {
+                const youtubePlaylistId = youtubePlaylistMap.get(spotifyPlaylist.name);
+                db.run(
+                    "INSERT OR REPLACE INTO migrated_playlists (spotify_playlist_id, youtube_playlist_id, name, status, last_updated) VALUES (?, ?, ?, ?, ?)",
+                    spotifyPlaylist.id,
+                    youtubePlaylistId,
+                    spotifyPlaylist.name,
+                    'migrated',
+                    Date.now()
+                );
+            }
+        }
+
+        return { message: "Playlists synced successfully." };
     })
     .get("/migration/status", () => {
         const playlists = db.query("SELECT spotify_playlist_id, status FROM migrated_playlists").all();

@@ -2,6 +2,7 @@
 
 import { compareTwoStrings } from "string-similarity";
 import { db } from "./db";
+import type { HeadersInit } from "bun";
 
 interface Tokens {
     spotify: string;
@@ -58,6 +59,7 @@ async function getTokens(): Promise<Tokens> {
 }
 
 function getYoutubeAuthHeaders(youtubeAuth: string | { [key: string]: string }): HeadersInit {
+	console.log({youtubeAuth});
     if (typeof youtubeAuth === 'string') { // OAuth token
         return {
             "Authorization": `Bearer ${youtubeAuth}`,
@@ -308,7 +310,7 @@ export async function main(spotifyPlaylistId: string, onProgress: (data: { type:
 
         const query = `${track.name} ${track.artists.map((a: any) => a.name).join(" ")} ${track.album.name}`;
         onProgress({ type: "info", message: `Searching for: ${query}` });
-        
+
         try {
             const searchResults = await searchYoutubeVideos(tokens.youtube, query);
             if (searchResults.length === 0) {

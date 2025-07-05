@@ -9,7 +9,8 @@ db.run(`
         access_token TEXT NOT NULL,
         refresh_token TEXT,
         expires_at INTEGER,
-        auth_type TEXT DEFAULT 'oauth' NOT NULL
+        auth_type TEXT DEFAULT 'oauth' NOT NULL,
+        value TEXT
     );
 `);
 
